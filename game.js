@@ -14,7 +14,7 @@ function saveBest(){try{localStorage.setItem('espace-detente-'+mode+'-record',St
 function fmt(t){return Math.floor(t/60).toString().padStart(2,'0')+':'+Math.floor(t%60).toString().padStart(2,'0')}
 function hud(){if(mode==='rally'){$('score').textContent=Math.round(rally.speed)+' km/h';$('best').textContent=fmt(rally.time);$('extra').textContent=Math.min(100,Math.round(rally.s/rally.finish*100))+' %'}else{$('score').textContent=Math.floor(score).toLocaleString('fr-FR');$('best').textContent=Math.floor(best).toLocaleString('fr-FR');$('extra').textContent=Math.floor(combo)+'×'}}
 function reset(){running=false;frame=0;score=0;combo=0;particles=[];player={x:210,y:460,heading:-Math.PI/2};Object.assign(rally,{s:0,x:roadCenter(0),vx:0,speed:0,time:0,hitCooldown:0,shake:0,steer:0,slip:0,bodyRoll:0,skid:0});best=readBest();hud();draw()}
-function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE 2,5D · V2.5':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'PARCOURS':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour la spéciale ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Accélère, négocie les virages et rejoins l’arrivée ! Rester sur la piste permet d’aller plus vite.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'PILOTE TON RALLYE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : maintiens les boutons. PC : flèches, ↑ pour accélérer et ↓ pour freiner.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
+function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE 2,5D · V2.6':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'PARCOURS':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour la spéciale ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Accélère, négocie les virages et rejoins l’arrivée ! Rester sur la piste permet d’aller plus vite.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'PILOTE TON RALLYE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : maintiens les boutons. PC : flèches, ↑ pour accélérer et ↓ pour freiner.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
 function back(){heldTouches.clear();running=false;cancelAnimationFrame(raf);mode=null;Object.keys(keys).forEach(k=>keys[k]=false);$('play').classList.add('hidden');$('home').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
 function start(){cancelAnimationFrame(raf);reset();running=true;$('overlay').classList.add('hidden');last=performance.now();raf=requestAnimationFrame(loop)}
 function finish(){running=false;cancelAnimationFrame(raf);if(mode==='rally'){$('overlay-title').textContent='Spéciale terminée ! 🏁';$('overlay-text').textContent='Temps : '+fmt(rally.time)+'. Bravo ! Tu peux refaire la course pour améliorer ton chrono.'}else{best=Math.max(best,Math.floor(score));saveBest();$('overlay-title').textContent='Partie terminée !';$('overlay-text').textContent='Score : '+Math.floor(score)+' points. Record : '+best+' points.'}$('start').textContent='Rejouer ↗';$('overlay').classList.remove('hidden');hud()}
@@ -126,7 +126,7 @@ if(rally.speed>65){
  ctx.restore();
 }
 // La carrosserie pivote légèrement en virage et prend du roulis en appui.
-const carYaw=Math.max(-.34,Math.min(.34,rally.slip*.010+rally.steer*.085));
+const carYaw=Math.max(-.34,Math.min(.34,rally.slip*.005+rally.steer*.060));
 ctx.save();ctx.translate(W/2,460);
 ctx.rotate(carYaw);
 ctx.translate(rally.bodyRoll*3,Math.abs(rally.bodyRoll)*1.2);
@@ -150,13 +150,13 @@ function tickRally(dt){
  const speedMS=rally.speed/3.6;
  // La direction dépend de la vitesse : manœuvres douces à basse vitesse,
  // davantage d'inertie et de glisse lorsque l'on attaque un virage rapide.
- const steeringGain=5.2+Math.min(21,speedMS*.42);
+ const steeringGain=5.0+Math.min(19,speedMS*.37);
  const desiredVx=rally.steer*steeringGain;
- const grip=off?2.5:(rally.speed>115?3.5:6.7);
- const brakingSlide=brake&&rally.speed>65?.66:1;
+ const grip=off?5.2:(rally.speed>115?9.2:11.0);
+ const brakingSlide=brake&&rally.speed>65?.88:1;
  rally.vx+=(desiredVx-rally.vx)*Math.min(1,grip*brakingSlide*dt);
  // Dérive latérale : décalage entre la trajectoire et les roues braquées.
- rally.slip+=(rally.vx-desiredVx-rally.slip)*Math.min(1,dt*5.5);
+ rally.slip+=(rally.vx-desiredVx-rally.slip)*Math.min(1,dt*8.5);
  rally.bodyRoll+=(rally.steer*Math.min(1,rally.speed/95)-rally.bodyRoll)*Math.min(1,dt*6);
  rally.x+=rally.vx*dt;
  rally.s+=speedMS*dt;
@@ -171,7 +171,7 @@ function tickRally(dt){
  }
  rally.shake=Math.max(0,rally.shake-dt);
  // Poussière plus dense dans les glissades et hors-piste, sans coût graphique élevé.
- const sliding=Math.abs(rally.slip)>4&&rally.speed>55;
+ const sliding=Math.abs(rally.slip)>5.5&&rally.speed>75;
  if(rally.speed>25&&(off||sliding||Math.random()<.15)){
    const amount=(off||sliding)?2:1;
    for(let i=0;i<amount;i++)particles.push({
