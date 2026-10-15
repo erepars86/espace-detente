@@ -34,3 +34,7 @@ html,body{overscroll-behavior-y:contain}
 #drive-controls.drift-controls .steer-side{max-width:300px;margin:auto}
 #drive-controls.drift-controls .steer-buttons button{min-height:75px}
 @media(max-width:650px){.play{margin-top:5px}.game-wrap{max-height:min(49vh,490px)}#drive-controls{column-gap:clamp(16px,6vw,38px);min-height:116px}#drive-controls .throttle-stack button{min-height:52px}#drive-controls .steer-buttons button{min-height:108px}.control-tip{font-size:9px}}
+
+/* Choix de circuit : lisible et utilisable au doigt sur iPhone. */
+.circuit-choice{display:flex;flex-direction:column;gap:8px;margin:14px auto 18px;max-width:260px;color:#d7d9f2;font-size:12px;font-weight:800;letter-spacing:.12em;text-align:left}
+.circuit-choice select{appearance:auto;display:block;width:100%;min-height:47px;padding:10px 12px;border-radius:12px;border:1px solid #8896bf;background:#17213a;color:#fff;font:600 16px system-ui}
