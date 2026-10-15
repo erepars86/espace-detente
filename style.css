@@ -16,3 +16,21 @@
 .control-tip{display:block;margin:2px auto 6px}
 .throttle-stack button:active,.steer-buttons button:active{filter:brightness(1.45);transform:scale(.98)}
 @media(max-width:650px){.drive-controls{gap:22px;min-height:105px;margin:9px 0 5px}.throttle-stack button{min-height:47px}.steer-buttons button{height:72px}.game-wrap{max-height:min(54vh,560px)}.game-note{margin-bottom:6px}}
+
+/* V2.2 - Bloquer sélection de texte, callout iOS et scroll pendant le pilotage */
+html,body{overscroll-behavior-y:contain}
+#drive-controls,#drive-controls *,#control-tip,#game-note,#game{-webkit-user-select:none!important;user-select:none!important;-webkit-touch-callout:none!important;-webkit-tap-highlight-color:transparent!important;touch-action:none!important}
+#drive-controls button{appearance:none;-webkit-appearance:none;outline:none;position:relative;display:flex;align-items:center;justify-content:center;line-height:1.1;min-width:0;white-space:nowrap}
+#drive-controls .throttle-stack button{display:flex;flex-direction:column;gap:2px;min-height:58px;font-size:22px}
+#drive-controls .throttle-stack button small{font-size:11px}
+#drive-controls .steer-buttons button{min-height:100px;font-size:30px}
+#drive-controls{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:clamp(18px,7vw,60px);padding:6px 0 2px}
+#drive-controls .throttle-stack{display:flex;flex-direction:column;width:100%;max-width:180px}
+#drive-controls .steer-side{width:100%;align-items:stretch;justify-content:center}
+#drive-controls .steer-buttons{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:8px}
+#drive-controls .steer-buttons button{max-width:none;width:100%}
+#drive-controls .steer-side>small{text-align:center}
+#drive-controls.drift-controls{grid-template-columns:1fr}
+#drive-controls.drift-controls .steer-side{max-width:300px;margin:auto}
+#drive-controls.drift-controls .steer-buttons button{min-height:75px}
+@media(max-width:650px){.play{margin-top:5px}.game-wrap{max-height:min(49vh,490px)}#drive-controls{column-gap:clamp(16px,6vw,38px);min-height:116px}#drive-controls .throttle-stack button{min-height:52px}#drive-controls .steer-buttons button{min-height:108px}.control-tip{font-size:9px}}

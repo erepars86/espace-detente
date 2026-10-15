@@ -14,8 +14,8 @@ function saveBest(){try{localStorage.setItem('espace-detente-'+mode+'-record',St
 function fmt(t){return Math.floor(t/60).toString().padStart(2,'0')+':'+Math.floor(t%60).toString().padStart(2,'0')}
 function hud(){if(mode==='rally'){$('score').textContent=Math.round(rally.speed)+' km/h';$('best').textContent=fmt(rally.time);$('extra').textContent=Math.min(100,Math.round(rally.s/rally.finish*100))+' %'}else{$('score').textContent=Math.floor(score).toLocaleString('fr-FR');$('best').textContent=Math.floor(best).toLocaleString('fr-FR');$('extra').textContent=Math.floor(combo)+'×'}}
 function reset(){running=false;frame=0;score=0;combo=0;particles=[];player={x:210,y:460,heading:-Math.PI/2};Object.assign(rally,{s:0,x:roadCenter(0),vx:0,speed:0,time:0,hitCooldown:0,shake:0});best=readBest();hud();draw()}
-function choose(next){cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE 2,5D · V2':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'PARCOURS':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour la spéciale ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Accélère, négocie les virages et rejoins l’arrivée ! Rester sur la piste permet d’aller plus vite.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'PILOTE TON RALLYE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : maintiens les boutons. PC : flèches, ↑ pour accélérer et ↓ pour freiner.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
-function back(){running=false;cancelAnimationFrame(raf);mode=null;Object.keys(keys).forEach(k=>keys[k]=false);$('play').classList.add('hidden');$('home').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
+function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE 2,5D · V2.2':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'PARCOURS':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour la spéciale ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Accélère, négocie les virages et rejoins l’arrivée ! Rester sur la piste permet d’aller plus vite.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'PILOTE TON RALLYE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : maintiens les boutons. PC : flèches, ↑ pour accélérer et ↓ pour freiner.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
+function back(){heldTouches.clear();running=false;cancelAnimationFrame(raf);mode=null;Object.keys(keys).forEach(k=>keys[k]=false);$('play').classList.add('hidden');$('home').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
 function start(){cancelAnimationFrame(raf);reset();running=true;$('overlay').classList.add('hidden');last=performance.now();raf=requestAnimationFrame(loop)}
 function finish(){running=false;cancelAnimationFrame(raf);if(mode==='rally'){$('overlay-title').textContent='Spéciale terminée ! 🏁';$('overlay-text').textContent='Temps : '+fmt(rally.time)+'. Bravo ! Tu peux refaire la course pour améliorer ton chrono.'}else{best=Math.max(best,Math.floor(score));saveBest();$('overlay-title').textContent='Partie terminée !';$('overlay-text').textContent='Score : '+Math.floor(score)+' points. Record : '+best+' points.'}$('start').textContent='Rejouer ↗';$('overlay').classList.remove('hidden');hud()}
 function rounded(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
@@ -52,10 +52,10 @@ const off=Math.abs(rally.x-roadCenter(rally.s))>roadHalf(rally.s)-13;if(off){ctx
 ctx.fillStyle='#080e24bd';rounded(13,12,394,34,10);ctx.fillStyle='#a8e7ff';ctx.font='bold 12px system-ui';ctx.textAlign='left';ctx.fillText('SPÉCIALE · FORÊT',25,33);ctx.textAlign='right';ctx.fillText(Math.round(rally.s)+' / '+rally.finish+' m',395,33);
 // Mini-carte simplifiée du tracé, en haut à droite.
 ctx.fillStyle='#0a1225bb';rounded(329,53,78,123,10);ctx.strokeStyle='#9a8df9';ctx.lineWidth=3;ctx.beginPath();for(let i=0;i<=24;i++){let s=i*rally.finish/24,x=368+roadCenter(s)*.19,y=163-i*4.05;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();ctx.fillStyle='#60e1ff';ctx.beginPath();ctx.arc(368+roadCenter(rally.s)*.19,163-rally.s/rally.finish*97.2,5,0,7);ctx.fill();}
-function tickRally(dt){const steer=(keys.right?1:0)-(keys.left?1:0);const gas=keys.accelerate,brake=keys.brake;let off=Math.abs(rally.x-roadCenter(rally.s))>roadHalf(rally.s)-12;let max=off?85:205;
+function tickRally(dt){const steer=(keys.right?1:0)-(keys.left?1:0);const gas=keys.accelerate,brake=keys.brake;let off=Math.abs(rally.x-roadCenter(rally.s))>roadHalf(rally.s)-12;let max=off?110:215;
 // Accélération progressive, mais forte : 0 à 100 en ~4 s et pointe ~200 km/h.
-const power=gas?(rally.speed<65?31:rally.speed<130?24:16):0;
-const resistance=gas?1.8:11;
+const power=gas?(rally.speed<65?48:rally.speed<130?32:21):0;
+const resistance=gas?2.2:9;
 rally.speed+=(power-resistance-(brake?66:0))*dt;
 rally.speed=Math.max(0,Math.min(max,rally.speed));
 rally.vx+=((steer*(11+rally.speed*.29))-rally.vx)*Math.min(1,dt*5.0);rally.x+=rally.vx*dt;rally.s+=rally.speed/3.6*dt;rally.time+=dt;rally.hitCooldown=Math.max(0,rally.hitCooldown-dt);for(const o of obstacles){if(rally.hitCooldown===0&&Math.abs(o.s-rally.s)<9&&Math.abs(rally.x-(roadCenter(o.s)+o.offset))<o.r+12){rally.speed*=.36;rally.hitCooldown=1.2;rally.shake=.3}}rally.shake=Math.max(0,rally.shake-dt);if(off&&rally.speed>18&&Math.random()<.5)particles.push({x:W/2+(Math.random()-.5)*30,y:495+Math.random()*20,r:3+Math.random()*8,life:.65});for(const p of particles){p.y+=dt*70;p.life-=dt}particles=particles.filter(p=>p.life>0).slice(-55);if(rally.s>=rally.finish){rally.s=rally.finish;finish()}}
@@ -66,9 +66,30 @@ function draw(){if(mode==='rally')drawRally();else if(mode==='drift')drawDrift()
 function loop(now){if(!running)return;let dt=Math.min((now-last)/1000,.035);last=now;frame+=dt;if(mode==='rally')tickRally(dt);else tickDrift(dt);draw();hud();if(running)raf=requestAnimationFrame(loop)}
 document.querySelectorAll('[data-game]').forEach(b=>b.addEventListener('click',()=>choose(b.dataset.game)));
 $('brand').addEventListener('click',e=>{e.preventDefault();back()});$('back').addEventListener('click',back);$('start').addEventListener('click',start);
-function bindControl(id,key){let el=$(id);el.addEventListener('pointerdown',e=>{e.preventDefault();keys[key]=true;try{el.setPointerCapture(e.pointerId)}catch{}});for(const event of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(event,e=>{keys[key]=false})}
+// Multi-touch iOS/Android : un pouce peut accélérer pendant que l'autre tourne.
+// On désactive explicitement les gestes natifs (sélection, zoom, défilement).
+const heldTouches = new Map();
+function refreshTouchKeys(){for(const k of Object.keys(keys))keys[k]=[...heldTouches.values()].includes(k)}
+function bindControl(id,key){
+ const el=$(id);
+ el.setAttribute('draggable','false');
+ el.addEventListener('dragstart',e=>e.preventDefault());
+ el.addEventListener('contextmenu',e=>e.preventDefault());
+ el.addEventListener('selectstart',e=>e.preventDefault());
+ el.addEventListener('touchstart',e=>{
+   e.preventDefault();
+   for(const t of e.changedTouches)heldTouches.set('t'+t.identifier,key);
+   refreshTouchKeys();
+ },{passive:false});
+ for(const event of ['touchend','touchcancel'])el.addEventListener(event,e=>{
+   e.preventDefault();for(const t of e.changedTouches)heldTouches.delete('t'+t.identifier);refreshTouchKeys();
+ },{passive:false});
+ // Souris et stylet : les évènements tactiles sont déjà gérés ci-dessus.
+ el.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')return;e.preventDefault();heldTouches.set('p'+e.pointerId,key);refreshTouchKeys();try{el.setPointerCapture(e.pointerId)}catch{} });
+ for(const event of ['pointerup','pointercancel','lostpointercapture'])el.addEventListener(event,e=>{if(e.pointerType==='touch')return;heldTouches.delete('p'+e.pointerId);refreshTouchKeys()});
+}
 for(const [id,key] of [['left','left'],['right','right'],['accelerate','accelerate'],['brake','brake']])bindControl(id,key);
 const keyMap={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'accelerate',ArrowDown:'brake',a:'left',d:'right',w:'accelerate',s:'brake'};
 window.addEventListener('keydown',e=>{const k=keyMap[e.key]||keyMap[e.key.toLowerCase()];if(k){e.preventDefault();keys[k]=true}});
 window.addEventListener('keyup',e=>{const k=keyMap[e.key]||keyMap[e.key.toLowerCase()];if(k){e.preventDefault();keys[k]=false}});
-window.addEventListener('blur',()=>Object.keys(keys).forEach(k=>keys[k]=false));
+window.addEventListener('blur',()=>{heldTouches.clear();Object.keys(keys).forEach(k=>keys[k]=false)});
