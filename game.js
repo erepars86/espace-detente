@@ -1,5 +1,5 @@
 'use strict';
-// Espace Détente V3.5 : nouvelle piste fermée, déplacement libre en coordonnées monde,
+// Espace Détente V3.6 : nouvelle piste fermée, déplacement libre en coordonnées monde,
 // caméra rotative et rendu Canvas autonome. Drift Challenge reste indépendant.
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d'),W=420,H=600;
@@ -54,6 +54,50 @@ for(let i=0;i<track.length;i+=2){
   const seed=i*19+17,side=i%44===0?1:-1;
   trackMarkers.push({x:a.x+nx*side*(TRACK_WIDTH*.5+22),y:a.y+ny*side*(TRACK_WIDTH*.5+22),angle:Math.atan2(dy,dx),seed});
  }
+}
+
+// Accessoires de piste placés dans le monde, à distance de la chaussée.
+const circuitProps=[];
+for(let i=12;i<track.length;i+=12){
+ const a=track[i],before=track[(i+track.length-5)%track.length],after=track[(i+5)%track.length];
+ const dx=after.x-before.x,dy=after.y-before.y,l=Math.hypot(dx,dy)||1,nx=-dy/l,ny=dx/l;
+ const side=i%24===12?1:-1,dist=TRACK_WIDTH*.5+29;
+ const curve=angleDelta(Math.atan2(after.y-a.y,after.x-a.x),Math.atan2(a.y-before.y,a.x-before.x));
+ const type=Math.abs(curve)>.14?'chevron':(i%36===12?'tires':'fence');
+ circuitProps.push({x:a.x+nx*side*dist,y:a.y+ny*side*dist,angle:Math.atan2(dy,dx),type,side,seed:i});
+}
+function drawCircuitProp(o){
+ ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.angle);
+ if(o.type==='chevron'){
+  ctx.fillStyle='#14251d88';ctx.fillRect(-3,-9,8,29);
+  ctx.fillStyle='#f3ddaa';ctx.fillRect(-21,-25,42,19);
+  ctx.fillStyle='#d34c32';
+  for(let j=-1;j<=1;j++){ctx.beginPath();ctx.moveTo(j*12-5,-22);ctx.lineTo(j*12+1,-15);ctx.lineTo(j*12-5,-9);ctx.lineTo(j*12+1,-9);ctx.lineTo(j*12+8,-15);ctx.lineTo(j*12+1,-22);ctx.fill()}
+  ctx.strokeStyle='#543d27';ctx.lineWidth=2;ctx.strokeRect(-21,-25,42,19);
+ }else if(o.type==='tires'){
+  for(let j=-1;j<=1;j++){ctx.fillStyle='#101719';ctx.beginPath();ctx.ellipse(j*16,1,10,13,0,0,TAU);ctx.fill();
+   ctx.fillStyle=j===0?'#e5e1d4':'#c84d36';ctx.beginPath();ctx.ellipse(j*16,-2,6,6,0,0,TAU);ctx.fill();
+   ctx.fillStyle='#303b3b';ctx.beginPath();ctx.ellipse(j*16,-2,3,3,0,0,TAU);ctx.fill();
+  }
+ }else{
+  ctx.strokeStyle='#352e24';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-25,-9);ctx.lineTo(-25,13);ctx.moveTo(25,-9);ctx.lineTo(25,13);ctx.stroke();
+  ctx.strokeStyle='#c8a879';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-29,-7);ctx.lineTo(29,-7);ctx.moveTo(-29,5);ctx.lineTo(29,5);ctx.stroke();
+ }
+ ctx.restore();
+}
+function drawStartArch(){
+ const a=track[0],b=track[1],h=Math.atan2(b.y-a.y,b.x-a.x);
+ ctx.save();ctx.translate(a.x,a.y);ctx.rotate(h);
+ // Poteaux de l'arche hors de la chaussée, barre de départ au-dessus.
+ for(const y of [-TRACK_WIDTH*.5-12,TRACK_WIDTH*.5+12]){
+  ctx.fillStyle='#1b2930';ctx.fillRect(-9,y-8,18,16);
+  ctx.fillStyle='#f1e9d9';ctx.fillRect(-6,y-7,12,14);
+ }
+ ctx.fillStyle='#152c34';ctx.fillRect(-17,-TRACK_WIDTH*.5-17,25,TRACK_WIDTH+34);
+ ctx.fillStyle='#f2d6a3';ctx.font='bold 11px system-ui';ctx.textAlign='center';
+ ctx.translate(-18,0);ctx.rotate(-PI/2);
+ ctx.fillText('ESPACE DÉTENTE  •  RALLYE',0,4);
+ ctx.restore();
 }
 function drawGroundDetail(o){
  ctx.save();ctx.translate(o.x,o.y);const n=noise(o.seed+3);
@@ -122,7 +166,7 @@ function saveBest(){try{localStorage.setItem('espace-detente-'+mode+'-record',St
 function fmt(t){return Math.floor(t/60).toString().padStart(2,'0')+':'+Math.floor(t%60).toString().padStart(2,'0')}
 function hud(){if(mode==='rally'){$('score').textContent=Math.round(rally.speed)+' km/h';$('best').textContent=fmt(rally.time);$('extra').textContent=(rally.lap+1)+' / 1'}else{$('score').textContent=Math.floor(score).toLocaleString('fr-FR');$('best').textContent=Math.floor(best).toLocaleString('fr-FR');$('extra').textContent=Math.floor(combo)+'×'}}
 function reset(){running=false;frame=0;score=0;combo=0;particles=[];skidMarks=[];rallyEffectClock=0;skidEffectClock=0;player={x:210,y:460,heading:-Math.PI/2};let a=track[0],b=track[1],h=Math.atan2(b.y-a.y,b.x-a.x);Object.assign(rally,{x:a.x,y:a.y,heading:h,cameraHeading:h,cameraX:a.x,cameraY:a.y,speed:0,side:0,steer:0,time:0,lap:0,progress:0,off:false,hitCooldown:0});best=readBest();hud();draw()}
-function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE · VISUELS V3.5':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'TOUR':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour le circuit ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Nouvelle carrosserie, piste texturée et effets de dérapage. À toi de piloter !':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'UN TOUR DE CIRCUIT · CAMÉRA SUIVEUSE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : accélère à gauche et tourne à droite. PC : flèches.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
+function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE · CIRCUIT V3.6':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'TOUR':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour le circuit ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Nouvelles barrières, panneaux de virage et arche de départ. À toi de piloter !':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'UN TOUR DE CIRCUIT · CAMÉRA SUIVEUSE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : accélère à gauche et tourne à droite. PC : flèches.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
 function back(){heldTouches.clear();running=false;cancelAnimationFrame(raf);mode=null;Object.keys(keys).forEach(k=>keys[k]=false);$('play').classList.add('hidden');$('home').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
 function start(){cancelAnimationFrame(raf);reset();running=true;$('overlay').classList.add('hidden');last=performance.now();raf=requestAnimationFrame(loop)}
 function finish(){running=false;cancelAnimationFrame(raf);if(mode==='rally'){$('overlay-title').textContent='Tour terminé ! 🏁';$('overlay-text').textContent='Chrono : '+fmt(rally.time)+'. Rejoue pour améliorer ton temps !';if(!best||rally.time<best){best=rally.time;saveBest()}}else{best=Math.max(best,Math.floor(score));saveBest();$('overlay-title').textContent='Partie terminée !';$('overlay-text').textContent='Score : '+Math.floor(score)+' points. Record : '+best+' points.'}$('start').textContent='Rejouer ↗';$('overlay').classList.remove('hidden');hud()}
@@ -211,6 +255,9 @@ function drawRally(){
  // Touffes, buissons et bornes : lisibles pendant le défilement.
  for(const o of groundDetails){if(Math.abs(o.x-rally.cameraX)<610&&Math.abs(o.y-rally.cameraY)<610)drawGroundDetail(o)}
  for(const o of trackMarkers){if(Math.abs(o.x-rally.cameraX)<610&&Math.abs(o.y-rally.cameraY)<610)drawMarker(o)}
+ for(const o of circuitProps){if(Math.abs(o.x-rally.cameraX)<610&&Math.abs(o.y-rally.cameraY)<610)drawCircuitProp(o)}
+ if(Math.abs(track[0].x-rally.cameraX)<610&&Math.abs(track[0].y-rally.cameraY)<610)drawStartArch();
+
  // Décors triés selon Y pour l'effet de profondeur.
  for(let o of scenery){if(Math.abs(o.x-rally.cameraX)>700||Math.abs(o.y-rally.cameraY)>700)continue;if(o.type==='tree')treeWorld(o);else rockWorld(o)}
  // Poussière dans le monde (ne colle plus à l'écran).
@@ -219,6 +266,10 @@ function drawRally(){
   ctx.fillStyle=p.kind==='dust'?'#dbc69b':'#d5bd8c';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill();
  }ctx.globalAlpha=1;
  drawCarWorld();ctx.restore();
+ // Léger vignettage fixe pour donner du contraste, sans masquer le pilotage.
+ const vignette=ctx.createRadialGradient(W*.5,H*.48,H*.24,W*.5,H*.48,H*.73);
+ vignette.addColorStop(0,'#081a1500');vignette.addColorStop(1,'#07150e55');
+ ctx.fillStyle=vignette;ctx.fillRect(0,0,W,H);
  // HUD intégré : piste complète + position du véhicule.
  ctx.fillStyle='#0b1b22d8';rounded(10,10,120,96,12);ctx.strokeStyle='#b4c3a0';ctx.lineWidth=1.5;ctx.beginPath();for(let i=0;i<track.length;i++){let p=track[i],x=70+p.x*.06,y=57+p.y*.06;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.closePath();ctx.stroke();ctx.fillStyle='#70eaff';ctx.beginPath();ctx.arc(70+rally.x*.06,57+rally.y*.06,4,0,TAU);ctx.fill();
  ctx.fillStyle='#10262acb';rounded(293,10,117,52,12);ctx.textAlign='center';ctx.fillStyle='#f7f6e8';ctx.font='bold 22px system-ui';ctx.fillText(Math.round(rally.speed)+' km/h',351,35);ctx.font='bold 10px system-ui';ctx.fillStyle='#b7d8bd';ctx.fillText('TOUR 1 / 1',351,51);
