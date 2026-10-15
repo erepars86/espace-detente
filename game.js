@@ -14,7 +14,7 @@ function saveBest(){try{localStorage.setItem('espace-detente-'+mode+'-record',St
 function fmt(t){return Math.floor(t/60).toString().padStart(2,'0')+':'+Math.floor(t%60).toString().padStart(2,'0')}
 function hud(){if(mode==='rally'){$('score').textContent=Math.round(rally.speed)+' km/h';$('best').textContent=fmt(rally.time);$('extra').textContent=Math.min(100,Math.round(rally.s/rally.finish*100))+' %'}else{$('score').textContent=Math.floor(score).toLocaleString('fr-FR');$('best').textContent=Math.floor(best).toLocaleString('fr-FR');$('extra').textContent=Math.floor(combo)+'×'}}
 function reset(){running=false;frame=0;score=0;combo=0;particles=[];player={x:210,y:460,heading:-Math.PI/2};Object.assign(rally,{s:0,x:roadCenter(0),vx:0,speed:0,time:0,hitCooldown:0,shake:0});best=readBest();hud();draw()}
-function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE 2,5D · V2.3.2':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'PARCOURS':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour la spéciale ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Accélère, négocie les virages et rejoins l’arrivée ! Rester sur la piste permet d’aller plus vite.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'PILOTE TON RALLYE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : maintiens les boutons. PC : flèches, ↑ pour accélérer et ↓ pour freiner.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
+function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE 2,5D · V2.4':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'PARCOURS':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour la spéciale ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Accélère, négocie les virages et rejoins l’arrivée ! Rester sur la piste permet d’aller plus vite.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'PILOTE TON RALLYE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : maintiens les boutons. PC : flèches, ↑ pour accélérer et ↓ pour freiner.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
 function back(){heldTouches.clear();running=false;cancelAnimationFrame(raf);mode=null;Object.keys(keys).forEach(k=>keys[k]=false);$('play').classList.add('hidden');$('home').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
 function start(){cancelAnimationFrame(raf);reset();running=true;$('overlay').classList.add('hidden');last=performance.now();raf=requestAnimationFrame(loop)}
 function finish(){running=false;cancelAnimationFrame(raf);if(mode==='rally'){$('overlay-title').textContent='Spéciale terminée ! 🏁';$('overlay-text').textContent='Temps : '+fmt(rally.time)+'. Bravo ! Tu peux refaire la course pour améliorer ton chrono.'}else{best=Math.max(best,Math.floor(score));saveBest();$('overlay-title').textContent='Partie terminée !';$('overlay-text').textContent='Score : '+Math.floor(score)+' points. Record : '+best+' points.'}$('start').textContent='Rejouer ↗';$('overlay').classList.remove('hidden');hud()}
@@ -30,8 +30,52 @@ function yAtDistance(distance){return 460-distance/METERS_PER_PIXEL}
 function scaleAtY(y){return .45+1.10*(y/H)}
 function sx(wx,y){return W/2+(wx-rally.x)*scaleAtY(y)}
 function polygon(a,b,c,d,fill){ctx.fillStyle=fill;ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.lineTo(...c);ctx.lineTo(...d);ctx.closePath();ctx.fill()}
-function drawTree(x,y,z=1){ctx.save();ctx.translate(x,y);ctx.scale(z,z);ctx.fillStyle='#0006';ctx.beginPath();ctx.ellipse(9,8,13,7,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#65452e';ctx.fillRect(-2,-10,5,19);ctx.fillStyle='#163b31';ctx.beginPath();ctx.arc(3,-13,15,0,Math.PI*2);ctx.fill();ctx.fillStyle='#236046';ctx.beginPath();ctx.arc(-5,-18,12,0,Math.PI*2);ctx.fill();ctx.fillStyle='#397f58';ctx.beginPath();ctx.arc(0,-22,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#78aa74aa';ctx.beginPath();ctx.arc(-5,-25,4,0,Math.PI*2);ctx.fill();ctx.restore()}
-function drawRally(){const night=false;ctx.fillStyle='#365d48';ctx.fillRect(0,0,W,H);
+// Décors stylisés détaillés : silhouettes de conifères et feuillus avec lumière et ombres.
+function drawTree(x,y,z=1,seed=0){
+ ctx.save();ctx.translate(x,y);ctx.scale(z,z);
+ const pine=noise(seed*7.17)>.34, height=32+noise(seed*3.91)*18;
+ ctx.fillStyle='#091e1a88';ctx.beginPath();ctx.ellipse(13,7,21,9,-.2,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle='#493d29';ctx.fillRect(-2,-height*.64,5,height*.70);
+ if(pine){
+  for(let k=0;k<4;k++){
+   const yy=-height+ k*10, width=9+k*5;
+   ctx.fillStyle=['#12382f','#164e3b','#206044','#2e7351'][k];
+   ctx.beginPath();ctx.moveTo(0,yy-10);ctx.lineTo(-width,yy+17);ctx.lineTo(width,yy+17);ctx.closePath();ctx.fill();
+   ctx.strokeStyle='#a0c18b22';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(-width*.55,yy+10);ctx.lineTo(-1,yy-4);ctx.stroke();
+  }
+ }else{
+  const leaves=[[-10,-height+13,13,'#1b503b'],[9,-height+14,15,'#286347'],[-1,-height+3,15,'#347955'],[-8,-height+6,8,'#4b9061']];
+  for(const [cx,cy,r,c] of leaves){ctx.fillStyle=c;ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fill()}
+ }
+ ctx.restore();
+}
+function drawBoulder(x,y,z=1){ctx.save();ctx.translate(x,y);ctx.scale(z,z);ctx.fillStyle='#081e1c66';ctx.beginPath();ctx.ellipse(6,5,16,6,0,0,7);ctx.fill();ctx.fillStyle='#696e63';ctx.beginPath();ctx.moveTo(-12,0);ctx.lineTo(-8,-9);ctx.lineTo(5,-13);ctx.lineTo(14,-5);ctx.lineTo(12,4);ctx.lineTo(-8,5);ctx.closePath();ctx.fill();ctx.fillStyle='#9ba08b';ctx.beginPath();ctx.moveTo(-8,-9);ctx.lineTo(5,-13);ctx.lineTo(1,-5);ctx.lineTo(-10,-3);ctx.closePath();ctx.fill();ctx.restore()}
+function drawRallyCar(x,y,angle){
+ ctx.save();ctx.translate(x,y);ctx.rotate(angle);ctx.scale(1.12,1.12);
+ ctx.fillStyle='#05131088';ctx.beginPath();ctx.ellipse(8,13,25,43,-.1,0,7);ctx.fill();
+ // Pneus et passages de roues.
+ ctx.fillStyle='#101719';for(const sy of [-27,21])for(const sx of [-23,16]){rounded(sx,sy,9,19,3);ctx.fillStyle='#39454a';ctx.fillRect(sx+2,sy+4,2,10);ctx.fillStyle='#101719'}
+ // Aileron arrière.
+ ctx.fillStyle='#142333';rounded(-23,32,46,7,2);ctx.fillStyle='#9aa7ac';ctx.fillRect(-20,33,40,1.5);
+ const body=ctx.createLinearGradient(-22,0,23,0);body.addColorStop(0,'#174c74');body.addColorStop(.23,'#29a8dc');body.addColorStop(.52,'#6bd9ee');body.addColorStop(.82,'#2580ae');body.addColorStop(1,'#143b62');ctx.fillStyle=body;rounded(-20,-38,40,78,11);
+ ctx.strokeStyle='#a7f1ff88';ctx.lineWidth=1.3;ctx.strokeRect(-16,-30,32,60);
+ // Capot et bandes de course.
+ ctx.fillStyle='#f5f4dc';ctx.beginPath();ctx.moveTo(-5,-37);ctx.lineTo(1,-37);ctx.lineTo(3,-15);ctx.lineTo(-4,-15);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#ffac40';ctx.fillRect(6,-34,4,18);
+ ctx.fillStyle='#153349';rounded(-15,-13,30,25,5);const glass=ctx.createLinearGradient(-12,-12,12,11);glass.addColorStop(0,'#7dc6d4');glass.addColorStop(.5,'#1c4565');glass.addColorStop(1,'#0d223a');ctx.fillStyle=glass;rounded(-13,-11,26,20,4);
+ ctx.strokeStyle='#b7f2f9aa';ctx.beginPath();ctx.moveTo(-10,-8);ctx.lineTo(8,-8);ctx.stroke();
+ ctx.fillStyle='#112c43';rounded(-13,15,26,15,4);ctx.fillStyle='#4a92b2';ctx.fillRect(-11,17,22,2);
+ // Portières et rétroviseurs.
+ ctx.fillStyle='#102d41';rounded(-25,-8,6,12,2);rounded(19,-8,6,12,2);
+ ctx.fillStyle='#fff1c9';rounded(-16,-35,9,5,2);rounded(7,-35,9,5,2);
+ ctx.fillStyle='#ff3d4f';rounded(-16,33,10,4,1);rounded(6,33,10,4,1);
+ ctx.fillStyle='#122c40';ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.fillText('07',0,3);
+ ctx.restore();
+}
+function drawRally(){
+ // Fond forestier en dégradé et légère brume à l'horizon.
+ const forest=ctx.createLinearGradient(0,0,0,H);forest.addColorStop(0,'#2b5947');forest.addColorStop(.5,'#284e3a');forest.addColorStop(1,'#203e32');ctx.fillStyle=forest;ctx.fillRect(0,0,W,H);
+ const mist=ctx.createLinearGradient(0,0,0,210);mist.addColorStop(0,'#d8d9a31e');mist.addColorStop(1,'#d8d9a300');ctx.fillStyle=mist;ctx.fillRect(0,0,W,210);
 // Brins d'herbe ancrés dans le monde : défilement continu, sans téléportation.
 const grassStep=7, grassStart=Math.floor((rally.s-45)/grassStep), grassEnd=Math.ceil((rally.s+145)/grassStep);
 for(let n=grassEnd;n>=grassStart;n--){
@@ -49,15 +93,19 @@ for(let n=grassEnd;n>=grassStart;n--){
 }
 
 // Bandes de piste : chaque segment suit le tracé réel, avec élargissement vers le bas.
-for(let y=-8;y<H+9;y+=8){let y2=y+9,sa=rally.s+distanceAtY(y),sb=rally.s+distanceAtY(y2);let ca=roadCenter(sa),cb=roadCenter(sb),wa=roadHalf(sa),wb=roadHalf(sb);let l1=sx(ca-wa,y),r1=sx(ca+wa,y),l2=sx(cb-wb,y2),r2=sx(cb+wb,y2);polygon([l1-14,y],[r1+14,y],[r2+14,y2],[l2-14,y2],'#a58b65');
-polygon([l1-8,y],[r1+8,y],[r2+8,y2],[l2-8,y2],'#c5ac7b');
-polygon([l1,y],[r1,y],[r2,y2],[l2,y2],Math.floor(sa/12)%2?'#8c7257':'#92765b');
-const grooves=[-.38,.38];for(const k of grooves){const xa=sx(ca+wa*k,y),xb=sx(cb+wb*k,y2);ctx.strokeStyle='#4d41324d';ctx.lineWidth=8*scaleAtY(y);ctx.beginPath();ctx.moveTo(xa,y);ctx.lineTo(xb,y2);ctx.stroke();}
-ctx.strokeStyle='#d9c19b99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(l1+6,y);ctx.lineTo(l2+6,y2);ctx.moveTo(r1-6,y);ctx.lineTo(r2-6,y2);ctx.stroke();}
+for(let y=-8;y<H+9;y+=8){let y2=y+9,sa=rally.s+distanceAtY(y),sb=rally.s+distanceAtY(y2);let ca=roadCenter(sa),cb=roadCenter(sb),wa=roadHalf(sa),wb=roadHalf(sb);let l1=sx(ca-wa,y),r1=sx(ca+wa,y),l2=sx(cb-wb,y2),r2=sx(cb+wb,y2);polygon([l1-18,y],[r1+18,y],[r2+18,y2],[l2-18,y2],'#635842');
+polygon([l1-12,y],[r1+12,y],[r2+12,y2],[l2-12,y2],'#b99a69');
+polygon([l1,y],[r1,y],[r2,y2],[l2,y2],Math.floor(sa/4)%3===0?'#886b4d':'#80654c');
+const grooves=[-.38,.38];for(const k of grooves){const xa=sx(ca+wa*k,y),xb=sx(cb+wb*k,y2);ctx.strokeStyle='#46382988';ctx.lineWidth=10*scaleAtY(y);ctx.beginPath();ctx.moveTo(xa,y);ctx.lineTo(xb,y2);ctx.stroke();}
+ctx.strokeStyle='#f3c88a8a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(l1+6,y);ctx.lineTo(l2+6,y2);ctx.moveTo(r1-6,y);ctx.lineTo(r2-6,y2);ctx.stroke();}
 // Décor procédural reproductible, ancré dans la piste.
-const low=Math.floor((rally.s-48)/18),high=Math.floor((rally.s+145)/18);for(let i=high;i>=low;i--){let s=i*18,dy=s-rally.s,y=yAtDistance(dy);if(y< -30||y>H+35)continue;let offset=roadHalf(s)+25+noise(i*3)*55;for(let side of [-1,1]){let wx=roadCenter(s)+side*offset;let x=sx(wx,y),z=scaleAtY(y)*(.7+noise(i+side)*.3);if(x>-30&&x<W+30){if(noise(i*5+side)> .18)drawTree(x,y,z);else{ctx.fillStyle='#a0a091';ctx.beginPath();ctx.ellipse(x,y,7*z,4*z,0,0,7);ctx.fill()}}}}
-// Poussière et cailloux sur la route.
-for(let i=0;i<32;i++){let s=(Math.floor(rally.s/5)+i-8)*5,dy=s-rally.s,y=yAtDistance(dy);if(y<0||y>600)continue;let wx=roadCenter(s)+(noise(i*19+Math.floor(s/9)*7)-.5)*roadHalf(s)*1.65,x=sx(wx,y);ctx.fillStyle=i%2?'#ae9576aa':'#3f3a35aa';ctx.fillRect(x,y,2*scaleAtY(y),2*scaleAtY(y))}
+const low=Math.floor((rally.s-48)/18),high=Math.floor((rally.s+145)/18);for(let i=high;i>=low;i--){let s=i*18,dy=s-rally.s,y=yAtDistance(dy);if(y< -30||y>H+35)continue;let offset=roadHalf(s)+25+noise(i*3)*55;for(let side of [-1,1]){let wx=roadCenter(s)+side*offset;let x=sx(wx,y),z=scaleAtY(y)*(.7+noise(i+side)*.3);if(x>-30&&x<W+30){if(noise(i*5+side)> .17)drawTree(x,y,z,i*3+side);else drawBoulder(x,y,z)}}}
+// Graviers, pierres et irrégularités ancrés au sol (ne scintillent pas).
+const firstStone=Math.floor((rally.s-48)/2.8),lastStone=Math.ceil((rally.s+145)/2.8);
+for(let i=lastStone;i>=firstStone;i--){const worldS=i*2.8,y=yAtDistance(worldS-rally.s);if(y<0||y>H)continue;
+ for(let j=0;j<3;j++){const seed=i*31+j*13;const wx=roadCenter(worldS)+(noise(seed+1)-.5)*roadHalf(worldS)*1.65,x=sx(wx,y),z=scaleAtY(y);if(x<0||x>W)continue;
+ ctx.fillStyle=noise(seed+3)>.6?'#c5a17a99':'#4c413688';ctx.beginPath();ctx.ellipse(x,y,(.6+noise(seed+4)*2)*z,(.6+noise(seed+5)*1.4)*z,0,0,7);ctx.fill();}
+}
 for(const o of obstacles){let dy=o.s-rally.s,y=yAtDistance(dy);if(y<-30||y>H+30)continue;let x=sx(roadCenter(o.s)+o.offset,y),z=scaleAtY(y);ctx.fillStyle='#0005';ctx.beginPath();ctx.ellipse(x+4*z,y+3*z,o.r*z,7*z,0,0,7);ctx.fill();ctx.fillStyle='#a9a59a';ctx.beginPath();ctx.ellipse(x,y,o.r*z,o.r*.7*z,0,0,7);ctx.fill();ctx.fillStyle='#ded3b9';ctx.beginPath();ctx.ellipse(x-4*z,y-4*z,4*z,3*z,0,0,7);ctx.fill()}
 // Poussière dynamique derrière les roues.
 for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/0.65)*.35;ctx.fillStyle='#e1c9a2';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fill()}ctx.globalAlpha=1;
@@ -77,7 +125,7 @@ if(rally.speed>65){
  }
  ctx.restore();
 }
-car(W/2,460,Math.max(-.26,Math.min(.26,rally.vx*.012)),'#43b9f3',1.02);
+drawRallyCar(W/2,460,Math.max(-.26,Math.min(.26,rally.vx*.012)));
 const off=Math.abs(rally.x-roadCenter(rally.s))>roadHalf(rally.s)-13;if(off){ctx.fillStyle='#ffb46c';ctx.font='bold 14px system-ui';ctx.textAlign='center';ctx.fillText('HORS PISTE — RALENTISSEMENT',210,60)}
 ctx.fillStyle='#080e24bd';rounded(13,12,394,34,10);ctx.fillStyle='#a8e7ff';ctx.font='bold 12px system-ui';ctx.textAlign='left';ctx.fillText('SPÉCIALE · FORÊT',25,33);ctx.textAlign='right';ctx.fillText(Math.round(rally.s)+' / '+rally.finish+' m',395,33);
 // Mini-carte simplifiée du tracé, en haut à droite.
