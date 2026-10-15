@@ -1,9 +1,10 @@
 'use strict';
-// Espace Détente V3.4 : nouvelle piste fermée, déplacement libre en coordonnées monde,
+// Espace Détente V3.5 : nouvelle piste fermée, déplacement libre en coordonnées monde,
 // caméra rotative et rendu Canvas autonome. Drift Challenge reste indépendant.
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d'),W=420,H=600;
 let mode=null,running=false,last=0,raf=0,score=0,best=0,frame=0,combo=0,particles=[];
+let skidMarks=[],rallyEffectClock=0,skidEffectClock=0;
 const keys={left:false,right:false,accelerate:false,brake:false};
 let player={x:210,y:460,heading:-Math.PI/2};
 const PI=Math.PI, TAU=PI*2;
@@ -35,12 +36,15 @@ for(let i=0;i<track.length;i+=2){let a=track[i],b=track[(i+1)%track.length],dx=b
  }}
 
 // Éléments fixes, générés une seule fois : aucune ressource réseau ni API.
-const groundDetails=[],roadDetails=[],trackMarkers=[];
+const groundDetails=[],roadDetails=[],trackMarkers=[],roadPatches=[];
 for(let i=0;i<track.length;i+=2){
  const a=track[i],b=track[(i+1)%track.length],dx=b.x-a.x,dy=b.y-a.y,l=Math.hypot(dx,dy)||1,nx=-dy/l,ny=dx/l;
  for(let j=0;j<3;j++){
   const seed=i*31+j*13+101,offset=(noise(seed)*2-1)*(TRACK_WIDTH*.43);
   roadDetails.push({x:a.x+nx*offset+dx/l*noise(seed+3)*16,y:a.y+ny*offset+dy/l*noise(seed+3)*16,r:1+noise(seed+7)*3.3,shade:noise(seed+11)});
+  if(j===0&&i%4===0){const t=noise(seed+23),side=t>.5?1:-1;
+   roadPatches.push({x:a.x+nx*side*TRACK_WIDTH*.34,y:a.y+ny*side*TRACK_WIDTH*.34,angle:Math.atan2(dy,dx),w:17+t*24,h:4+t*8,seed});
+  }
  }
  for(const side of [-1,1]){
   const seed=i*41+side*29+211,r=TRACK_WIDTH*.5+19+noise(seed+1)*105;
@@ -68,12 +72,57 @@ function drawMarker(o){
  ctx.fillStyle='#e8e4c7';ctx.fillRect(-4,-5,8,21);ctx.fillStyle='#d94b34';ctx.fillRect(-4,-5,8,7);
  ctx.restore();
 }
+function drawRoadPatch(o){
+ ctx.save();ctx.translate(o.x,o.y);ctx.rotate(o.angle);
+ ctx.fillStyle=noise(o.seed+5)>.5?'#58462d50':'#e0c69c42';
+ ctx.beginPath();ctx.ellipse(0,0,o.w,o.h,0,0,TAU);ctx.fill();
+ ctx.strokeStyle='#edce9a44';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-o.w*.6,-o.h*.35);ctx.lineTo(o.w*.4,-o.h*.3);ctx.stroke();ctx.restore();
+}
+function drawSkidMarks(){
+ ctx.lineCap='round';
+ for(const m of skidMarks){
+  if(Math.abs(m.x-rally.cameraX)>650||Math.abs(m.y-rally.cameraY)>650)continue;
+  ctx.globalAlpha=m.alpha;ctx.strokeStyle=m.off?'#4a3726':'#3c3026';ctx.lineWidth=m.width;
+  ctx.beginPath();ctx.moveTo(m.x,m.y);ctx.lineTo(m.x2,m.y2);ctx.stroke();
+ }
+ ctx.globalAlpha=1;
+}
+function spawnRallyEffects(dt){
+ // Particules en coordonnées monde, avec un budget réduit pour mobile.
+ rallyEffectClock+=dt;skidEffectClock+=dt;
+ const active=rally.speed>42&&(rally.off||Math.abs(rally.side)>5||keys.brake);
+ if(active&&rallyEffectClock>.045){
+  rallyEffectClock=0;
+  const rearX=rally.x-Math.cos(rally.heading)*35,rearY=rally.y-Math.sin(rally.heading)*35;
+  for(let j=0;j<(rally.off?3:2);j++){
+   const side=(Math.random()-.5)*37;
+   particles.push({x:rearX-Math.sin(rally.heading)*side,y:rearY+Math.cos(rally.heading)*side,
+    vx:-Math.cos(rally.heading)*(15+Math.random()*18)+(Math.random()-.5)*22,
+    vy:-Math.sin(rally.heading)*(15+Math.random()*18)+(Math.random()-.5)*22,
+    life:.45+Math.random()*.42,maxLife:.87,r:3+Math.random()*7,kind:'dust'});
+  }
+ }
+ if(rally.speed>65&&(Math.abs(rally.side)>7||keys.brake)&&skidEffectClock>.09){
+  skidEffectClock=0;
+  for(const side of [-1,1]){
+   const bx=rally.x-Math.cos(rally.heading)*23-Math.sin(rally.heading)*side*18;
+   const by=rally.y-Math.sin(rally.heading)*23+Math.cos(rally.heading)*side*18;
+   const lx=bx-Math.cos(rally.heading)*8,ly=by-Math.sin(rally.heading)*8;
+   skidMarks.push({x:lx,y:ly,x2:bx,y2:by,alpha:rally.off?.23:.30,width:2.2,off:rally.off});
+  }
+ }
+ if(skidMarks.length>320)skidMarks.splice(0,skidMarks.length-320);
+ for(const part of particles){part.life-=dt;if(part.kind==='dust'){
+  part.x+=part.vx*dt;part.y+=part.vy*dt;part.r+=dt*18;
+ }}
+ particles=particles.filter(part=>part.life>0).slice(-85);
+}
 function readBest(){try{return Number(localStorage.getItem('espace-detente-'+mode+'-record'))||0}catch{return 0}}
 function saveBest(){try{localStorage.setItem('espace-detente-'+mode+'-record',String(best))}catch{}}
 function fmt(t){return Math.floor(t/60).toString().padStart(2,'0')+':'+Math.floor(t%60).toString().padStart(2,'0')}
 function hud(){if(mode==='rally'){$('score').textContent=Math.round(rally.speed)+' km/h';$('best').textContent=fmt(rally.time);$('extra').textContent=(rally.lap+1)+' / 1'}else{$('score').textContent=Math.floor(score).toLocaleString('fr-FR');$('best').textContent=Math.floor(best).toLocaleString('fr-FR');$('extra').textContent=Math.floor(combo)+'×'}}
-function reset(){running=false;frame=0;score=0;combo=0;particles=[];player={x:210,y:460,heading:-Math.PI/2};let a=track[0],b=track[1],h=Math.atan2(b.y-a.y,b.x-a.x);Object.assign(rally,{x:a.x,y:a.y,heading:h,cameraHeading:h,cameraX:a.x,cameraY:a.y,speed:0,side:0,steer:0,time:0,lap:0,progress:0,off:false,hitCooldown:0});best=readBest();hud();draw()}
-function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE · DÉCORS V3.4':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'TOUR':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour le circuit ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Nouveaux décors, piste détaillée et voiture retravaillée. À toi de piloter !':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'UN TOUR DE CIRCUIT · CAMÉRA SUIVEUSE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : accélère à gauche et tourne à droite. PC : flèches.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
+function reset(){running=false;frame=0;score=0;combo=0;particles=[];skidMarks=[];rallyEffectClock=0;skidEffectClock=0;player={x:210,y:460,heading:-Math.PI/2};let a=track[0],b=track[1],h=Math.atan2(b.y-a.y,b.x-a.x);Object.assign(rally,{x:a.x,y:a.y,heading:h,cameraHeading:h,cameraX:a.x,cameraY:a.y,speed:0,side:0,steer:0,time:0,lap:0,progress:0,off:false,hitCooldown:0});best=readBest();hud();draw()}
+function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE · VISUELS V3.5':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'TOUR':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour le circuit ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Nouvelle carrosserie, piste texturée et effets de dérapage. À toi de piloter !':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'UN TOUR DE CIRCUIT · CAMÉRA SUIVEUSE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : accélère à gauche et tourne à droite. PC : flèches.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
 function back(){heldTouches.clear();running=false;cancelAnimationFrame(raf);mode=null;Object.keys(keys).forEach(k=>keys[k]=false);$('play').classList.add('hidden');$('home').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
 function start(){cancelAnimationFrame(raf);reset();running=true;$('overlay').classList.add('hidden');last=performance.now();raf=requestAnimationFrame(loop)}
 function finish(){running=false;cancelAnimationFrame(raf);if(mode==='rally'){$('overlay-title').textContent='Tour terminé ! 🏁';$('overlay-text').textContent='Chrono : '+fmt(rally.time)+'. Rejoue pour améliorer ton temps !';if(!best||rally.time<best){best=rally.time;saveBest()}}else{best=Math.max(best,Math.floor(score));saveBest();$('overlay-title').textContent='Partie terminée !';$('overlay-text').textContent='Score : '+Math.floor(score)+' points. Record : '+best+' points.'}$('start').textContent='Rejouer ↗';$('overlay').classList.remove('hidden');hud()}
@@ -103,12 +152,23 @@ function treeWorld(o){
 function rockWorld(o){ctx.save();ctx.translate(o.x,o.y);ctx.fillStyle='#07171199';ctx.beginPath();ctx.ellipse(6,8,18,10,0,0,TAU);ctx.fill();ctx.fillStyle='#707b6e';ctx.beginPath();ctx.moveTo(-16,2);ctx.lineTo(-8,-13);ctx.lineTo(8,-16);ctx.lineTo(18,-1);ctx.lineTo(10,9);ctx.lineTo(-10,9);ctx.fill();ctx.fillStyle='#a8aa95';ctx.beginPath();ctx.moveTo(-8,-13);ctx.lineTo(8,-16);ctx.lineTo(1,-4);ctx.lineTo(-12,1);ctx.fill();ctx.restore()}
 function drawCarWorld(){ctx.save();ctx.translate(rally.x,rally.y);ctx.rotate(rally.heading+PI/2); // la carrosserie est dessinée nez vers -Y
  // ombre et carrosserie légèrement inclinées pour la sensation de poids
- ctx.fillStyle='#0008';ctx.beginPath();ctx.ellipse(8,10,25,43,0,0,TAU);ctx.fill();
+ ctx.fillStyle='#0008';ctx.beginPath();ctx.ellipse(11,13,28,46,0,0,TAU);ctx.fill();
+ // Carrosserie légèrement animée lors du braquage, sans changer la physique.
+ ctx.rotate(-rally.steer*.035);
+ // Bas de caisse et ailes foncées.
+ ctx.fillStyle='#0a283d';rounded(-23,-32,46,67,11);
+ ctx.fillStyle='#051e30';rounded(-24,-26,8,24,4);rounded(16,-26,8,24,4);
  for(let sy of [-29,20])for(let sx of [-25,17]){ctx.fillStyle='#0b1115';rounded(sx,sy,9,20,3);ctx.fillStyle='#7d8281';ctx.fillRect(sx+2,sy+5,3,10)}
  const body=ctx.createLinearGradient(-22,0,22,0);body.addColorStop(0,'#0e3b60');body.addColorStop(.28,'#18a1d4');body.addColorStop(.52,'#79def3');body.addColorStop(.8,'#2280b7');body.addColorStop(1,'#0b345a');ctx.fillStyle=body;rounded(-21,-40,42,81,10);
  ctx.fillStyle='#e5f6ff';ctx.fillRect(-5,-38,10,18);ctx.fillRect(-5,16,10,18);
  ctx.fillStyle='#0c273c';rounded(-16,-15,32,27,6);ctx.fillStyle='#68a9c3';rounded(-13,-12,26,18,4);
  ctx.fillStyle='#183d53';rounded(-15,16,30,11,4);
+ // Vitres en dégradé, montant central et essuie-glace.
+ const glass=ctx.createLinearGradient(-12,-15,13,10);
+ glass.addColorStop(0,'#b8e6ec');glass.addColorStop(.55,'#3d8ba8');glass.addColorStop(1,'#153b58');
+ ctx.fillStyle=glass;rounded(-13,-12,26,18,4);
+ ctx.strokeStyle='#e2f8ff9c';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-11,4);ctx.lineTo(11,-8);ctx.stroke();
+ ctx.fillStyle='#103248';rounded(-13,18,26,6,3);
  ctx.fillStyle='#e8f8ff';ctx.fillRect(-16,-37,10,5);ctx.fillRect(6,-37,10,5);
  ctx.fillStyle='#ef4557';ctx.fillRect(-16,34,10,4);ctx.fillRect(6,34,10,4);
  ctx.fillStyle='#112b43';rounded(-24,32,48,7,3);
@@ -119,6 +179,11 @@ function drawCarWorld(){ctx.save();ctx.translate(rally.x,rally.y);ctx.rotate(ral
  ctx.fillStyle='#102c40';rounded(-13,-29,26,4,2);
  ctx.fillStyle='#ffffffbb';ctx.fillRect(-15,-36,8,2);ctx.fillRect(7,-36,8,2);
  ctx.fillStyle='#0a2134';rounded(-18,27,36,4,2);
+ // Calandre, aération de capot et rivets du spoiler.
+ ctx.fillStyle='#08263b';rounded(-11,-33,22,5,2);
+ ctx.strokeStyle='#c0ecfaaa';ctx.lineWidth=1;for(let k=-6;k<=6;k+=6){ctx.beginPath();ctx.moveTo(k,-32);ctx.lineTo(k,-29);ctx.stroke()}
+ ctx.fillStyle='#d7e5ea';ctx.fillRect(-19,33,4,2);ctx.fillRect(15,33,4,2);
+ ctx.fillStyle='#0b2433';rounded(-19,27,38,4,2);
  ctx.restore()}
 function drawRally(){
  ctx.fillStyle='#284a35';ctx.fillRect(0,0,W,H);
@@ -131,12 +196,16 @@ function drawRally(){
  for(const o of roadDetails){if(Math.abs(o.x-rally.cameraX)>610||Math.abs(o.y-rally.cameraY)>610)continue;
   ctx.fillStyle=o.shade>.55?'#d9c39b80':'#57463166';ctx.beginPath();ctx.ellipse(o.x,o.y,o.r*1.6,o.r*.65,o.shade*TAU,0,TAU);ctx.fill();
  }
+ // Petites zones de terre usée sur les bords et variation de texture.
+ for(const o of roadPatches){if(Math.abs(o.x-rally.cameraX)<610&&Math.abs(o.y-rally.cameraY)<610)drawRoadPatch(o)}
  // Traces des pneus suivent réellement les courbes du circuit.
  for(let lane of [-26,26]){ctx.strokeStyle='#56463177';ctx.lineWidth=7;ctx.beginPath();for(let i=0;i<=track.length;i++){let p=track[i%track.length],prev=track[(i+track.length-1)%track.length],next=track[(i+1)%track.length],dx=next.x-prev.x,dy=next.y-prev.y,len=Math.hypot(dx,dy)||1,x=p.x-dy/len*lane,y=p.y+dx/len*lane;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke()}
  // Bordures discrètes en pointillés, plus lisibles dans les virages.
  ctx.setLineDash([15,21]);strokeTrack(TRACK_WIDTH-5,'#dfcba177');ctx.setLineDash([]);
  // Accents lumineux très discrets sur les bordures de piste.
  ctx.setLineDash([5,28]);strokeTrack(TRACK_WIDTH+13,'#d6b78155');ctx.setLineDash([]);
+ // Marques laissées par le joueur, sans effet sur l'adhérence.
+ drawSkidMarks();
  // Départ : damier perpendiculaire à la tangente.
  {let a=track[0],b=track[1],h=Math.atan2(b.y-a.y,b.x-a.x);ctx.save();ctx.translate(a.x,a.y);ctx.rotate(h);for(let r=0;r<2;r++)for(let c=0;c<10;c++){ctx.fillStyle=(r+c)%2?'#182021':'#f1ebdc';ctx.fillRect(-9+r*9,-TRACK_WIDTH/2+c*TRACK_WIDTH/10,9,TRACK_WIDTH/10)}ctx.restore()}
  // Touffes, buissons et bornes : lisibles pendant le défilement.
@@ -145,7 +214,10 @@ function drawRally(){
  // Décors triés selon Y pour l'effet de profondeur.
  for(let o of scenery){if(Math.abs(o.x-rally.cameraX)>700||Math.abs(o.y-rally.cameraY)>700)continue;if(o.type==='tree')treeWorld(o);else rockWorld(o)}
  // Poussière dans le monde (ne colle plus à l'écran).
- for(let p of particles){ctx.globalAlpha=clamp(p.life/.65,0,1)*.45;ctx.fillStyle='#d5bd8c';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill()}ctx.globalAlpha=1;
+ for(let p of particles){
+  ctx.globalAlpha=clamp(p.life/(p.maxLife||.65),0,1)*.40;
+  ctx.fillStyle=p.kind==='dust'?'#dbc69b':'#d5bd8c';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill();
+ }ctx.globalAlpha=1;
  drawCarWorld();ctx.restore();
  // HUD intégré : piste complète + position du véhicule.
  ctx.fillStyle='#0b1b22d8';rounded(10,10,120,96,12);ctx.strokeStyle='#b4c3a0';ctx.lineWidth=1.5;ctx.beginPath();for(let i=0;i<track.length;i++){let p=track[i],x=70+p.x*.06,y=57+p.y*.06;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.closePath();ctx.stroke();ctx.fillStyle='#70eaff';ctx.beginPath();ctx.arc(70+rally.x*.06,57+rally.y*.06,4,0,TAU);ctx.fill();
@@ -188,8 +260,7 @@ function tickRally(dt){
  rally.cameraHeading+=angleDelta(rally.heading,rally.cameraHeading)*(1-Math.exp(-6.8*dt));
  rally.cameraX+=(rally.x-rally.cameraX)*Math.min(1,dt*9);
  rally.cameraY+=(rally.y-rally.cameraY)*Math.min(1,dt*9);
- if((rally.off||Math.abs(rally.side)>7)&&rally.speed>60){for(let j=0;j<(rally.off?2:1);j++)particles.push({x:rally.x-Math.cos(rally.heading)*28+(Math.random()-.5)*20,y:rally.y-Math.sin(rally.heading)*28+(Math.random()-.5)*20,life:.65,r:3+Math.random()*7})}
- for(let p of particles)p.life-=dt;particles=particles.filter(p=>p.life>0).slice(-65);
+ spawnRallyEffects(dt);
  // La ligne ne valide le tour qu'après avoir parcouru une grande partie du circuit.
  if(rally.progress<.2&&road.progress>.2&&road.progress<.75)rally.progress=.5;
  if(rally.progress>=.5&&road.progress>.83)rally.progress=.9;
