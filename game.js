@@ -1,5 +1,5 @@
 'use strict';
-// Espace Détente V3.0 : nouvelle piste fermée, déplacement libre en coordonnées monde,
+// Espace Détente V3.1 : nouvelle piste fermée, déplacement libre en coordonnées monde,
 // caméra rotative et rendu Canvas autonome. Drift Challenge reste indépendant.
 const $=id=>document.getElementById(id);
 const canvas=$('game'),ctx=canvas.getContext('2d'),W=420,H=600;
@@ -38,7 +38,7 @@ function saveBest(){try{localStorage.setItem('espace-detente-'+mode+'-record',St
 function fmt(t){return Math.floor(t/60).toString().padStart(2,'0')+':'+Math.floor(t%60).toString().padStart(2,'0')}
 function hud(){if(mode==='rally'){$('score').textContent=Math.round(rally.speed)+' km/h';$('best').textContent=fmt(rally.time);$('extra').textContent=(rally.lap+1)+' / 1'}else{$('score').textContent=Math.floor(score).toLocaleString('fr-FR');$('best').textContent=Math.floor(best).toLocaleString('fr-FR');$('extra').textContent=Math.floor(combo)+'×'}}
 function reset(){running=false;frame=0;score=0;combo=0;particles=[];player={x:210,y:460,heading:-Math.PI/2};let a=track[0],b=track[1],h=Math.atan2(b.y-a.y,b.x-a.x);Object.assign(rally,{x:a.x,y:a.y,heading:h,cameraHeading:h,cameraX:a.x,cameraY:a.y,speed:0,side:0,steer:0,time:0,lap:0,progress:0,off:false,hitCooldown:0});best=readBest();hud();draw()}
-function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE · NOUVEAU MOTEUR V3.0':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'TOUR':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour le circuit ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Un vrai circuit fermé ! Suis la piste, prends les virages et franchis la ligne après un tour.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'UN TOUR DE CIRCUIT · CAMÉRA SUIVEUSE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : accélère à gauche et tourne à droite. PC : flèches.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
+function choose(next){heldTouches.clear();cancelAnimationFrame(raf);mode=next;Object.keys(keys).forEach(k=>keys[k]=false);$('home').classList.add('hidden');$('play').classList.remove('hidden');$('pedals').classList.toggle('hidden',next!=='rally');$('drive-controls').classList.toggle('drift-controls',next!=='rally');$('mode').textContent=next==='rally'?'RALLYE · NOUVEAU MOTEUR V3.1':'DRIFT CHALLENGE';$('extra-label').textContent=next==='rally'?'TOUR':'COMBO';$('score').previousElementSibling.textContent=next==='rally'?'VITESSE':'SCORE';$('best').previousElementSibling.textContent=next==='rally'?'CHRONO':'RECORD';$('overlay-title').textContent=next==='rally'?'Prêt pour le circuit ?':'Prêt à drifter ?';$('overlay-text').textContent=next==='rally'?'Un vrai circuit fermé ! Suis la piste, prends les virages et franchis la ligne après un tour.':'Maintiens une direction pour drifter et marque des points. Évite les bords !';$('control-tip').textContent=next==='rally'?'UN TOUR DE CIRCUIT · CAMÉRA SUIVEUSE':'Maintiens ← ou → pour drifter';$('game-note').textContent=next==='rally'?'Mobile : accélère à gauche et tourne à droite. PC : flèches.':'Mobile : gauche/droite. PC : flèches gauche/droite.';$('overlay').classList.remove('hidden');$('start').textContent="C'est parti →";reset();window.scrollTo({top:0,behavior:'smooth'})}
 function back(){heldTouches.clear();running=false;cancelAnimationFrame(raf);mode=null;Object.keys(keys).forEach(k=>keys[k]=false);$('play').classList.add('hidden');$('home').classList.remove('hidden');window.scrollTo({top:0,behavior:'smooth'})}
 function start(){cancelAnimationFrame(raf);reset();running=true;$('overlay').classList.add('hidden');last=performance.now();raf=requestAnimationFrame(loop)}
 function finish(){running=false;cancelAnimationFrame(raf);if(mode==='rally'){$('overlay-title').textContent='Tour terminé ! 🏁';$('overlay-text').textContent='Chrono : '+fmt(rally.time)+'. Rejoue pour améliorer ton temps !';if(!best||rally.time<best){best=rally.time;saveBest()}}else{best=Math.max(best,Math.floor(score));saveBest();$('overlay-title').textContent='Partie terminée !';$('overlay-text').textContent='Score : '+Math.floor(score)+' points. Record : '+best+' points.'}$('start').textContent='Rejouer ↗';$('overlay').classList.remove('hidden');hud()}
@@ -92,15 +92,18 @@ function tickRally(dt){
  rally.time+=dt;
  rally.steer+=(steerInput-rally.steer)*Math.min(1,dt*9);
  const road=nearestRoad(rally.x,rally.y);rally.off=road.distance>TRACK_WIDTH*.5-11;
- const maxSpeed=rally.off?85:185;
- const acceleration=gas?(rally.speed<70?68:43):0;
- rally.speed=clamp(rally.speed+(acceleration-(brake?150:gas?9:22))*dt,0,maxSpeed);
+ const maxSpeed=rally.off?105:205;
+ const acceleration=gas?(rally.speed<95?125:82):0;
+ rally.speed=clamp(rally.speed+(acceleration-(brake?195:gas?12:29))*dt,0,maxSpeed);
+ // Facteur de rythme arcade : l’ancienne conversion km/h -> unités monde
+ // donnait une impression de ralenti (environ 40 px/s à 185 km/h).
  const meters=rally.speed/3.6;
+ const worldSpeed=meters*2.65;
  // La voiture suit son cap; le braquage dépend de sa vitesse, sans glissade artificielle excessive.
  const turnRate=clamp(meters/15,0,2.1)*.83;
  rally.heading+=rally.steer*turnRate*dt;
- rally.x+=Math.cos(rally.heading)*meters*dt;
- rally.y+=Math.sin(rally.heading)*meters*dt;
+ rally.x+=Math.cos(rally.heading)*worldSpeed*dt;
+ rally.y+=Math.sin(rally.heading)*worldSpeed*dt;
  rally.cameraHeading+=angleDelta(rally.heading,rally.cameraHeading)*Math.min(1,dt*5);
  rally.cameraX+=(rally.x-rally.cameraX)*Math.min(1,dt*9);
  rally.cameraY+=(rally.y-rally.cameraY)*Math.min(1,dt*9);
